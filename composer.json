@@ -11,6 +11,6 @@
     "php": "^7.3"
   },
   "autoload": {
-    "classmap": ["PDFreactor.php"]
+    "classmap": ["PDFreactor.class.php"]
   }
 }
