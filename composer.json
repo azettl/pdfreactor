@@ -1,0 +1,16 @@
+{
+  "name": "azettl/pdfreactor",
+  "description": "PHP Wrapper for PDFreactor. This class is taken from https://www.pdfreactor.com/",
+  "keywords": [
+    "pdf", "pdfreactor"
+  ],
+  "license": "",
+  "authors": [
+  ],
+  "require": {
+    "php": "^7.3"
+  },
+  "autoload": {
+    "classmap": ["PDFreactor.php"]
+  }
+}
