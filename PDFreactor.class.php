@@ -1016,4 +1016,3 @@ abstract class XmpPriority {
     const LOW = "LOW";
     const NONE = "NONE";
 }
-?>
