@@ -1,13 +1,13 @@
 <?php
 /**
- * RealObjects PDFreactor PHP Wrapper version 7
+ * RealObjects PDFreactor PHP Client version 8
  * https://www.pdfreactor.com
  * 
  * Released under the following license:
  * 
  * The MIT License (MIT)
  * 
- * Copyright (c) 2015-2020 RealObjects GmbH
+ * Copyright (c) 2015-2021 RealObjects GmbH
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -67,8 +67,8 @@ class PDFreactor {
             }
         }
         $headerStr .= "Content-Type: application/json\r\n";
-        $headerStr .= "User-Agent: PDFreactor PHP API v7\r\n";
-        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v7\r\n";
+        $headerStr .= "User-Agent: PDFreactor PHP API v8\r\n";
+        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v8\r\n";
         if (!empty($connectionSettings) || !empty($cookieStr)) {
             $headerStr .= "Cookie: " . substr($cookieStr, 0, -2);
         }
@@ -88,30 +88,44 @@ class PDFreactor {
         $rh = fopen($url, false, false, $context);
         if (!isset($http_response_header)) {
             $lastError = error_get_last();
-            throw new \Exception('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
+            throw new UnreachableServiceException('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
         }
         $status = intval(substr($http_response_header[0], 9, 3));
         if ($status >= 200 && $status <= 204) {
             $errorMode = false;
         }
-        $result = stream_get_contents($rh);
-        fclose($rh);
-        if ($status == 422) {
-            throw new \Exception(json_decode($result)->error);
-        } else if ($status == 400) {
-            throw new \Exception('Invalid client data. '.json_decode($result)->error);
-        } else if ($status == 401) {
-            throw new \Exception('Unauthorized. '.json_decode($result)->error);
-        } else if ($status == 413) {
-            throw new \Exception('The configuration is too large to process.');
-        } else if ($status == 500) {
-            throw new \Exception(json_decode($result)->error);
-        } else if ($status == 503) {
-            throw new \Exception('PDFreactor Web Service is unavailable.');
-        } else if ($status > 400) {
-            throw new \Exception('PDFreactor Web Service error (status: ' . $status . ').');
+        if (!$errorMode) {
+            $result = json_decode(stream_get_contents($rh));
         }
-        return json_decode($result);
+        fclose($rh);
+        $errorId = null;
+        if ($errorMode) {
+            foreach ($http_response_header as $header) {
+                $t = explode(':', $header, 2);
+                if (isset($t[1])) {
+                    $headerName = trim($t[0]);
+                    if ($headerName == "X-RO-Error-ID") {
+                        $errorId = trim($t[1]);
+                    }
+                }
+            }
+        }
+        if ($status == 422) {
+            throw $this->_createServerException($errorId, $result->error, $result);
+        } else if ($status == 400) {
+            throw $this->_createServerException($errorId, 'Invalid client data. '.$result->error, $result);
+        } else if ($status == 401) {
+            throw $this->_createServerException($errorId, 'Unauthorized. '.$result->error, $result);
+        } else if ($status == 413) {
+            throw $this->_createServerException($errorId, 'The configuration is too large to process.', $result);
+        } else if ($status == 500) {
+            throw $this->_createServerException($errorId, $result->error, $result);
+        } else if ($status == 503) {
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service is unavailable.', $result);
+        } else if ($status > 400) {
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service error (status: ' . $status . ').', $result);
+        }
+        return $result;
     }
     function convertAsBinary($config, & $wh = null, & $connectionSettings = null) {
         $url = $this->url ."/convert.bin";
@@ -143,8 +157,8 @@ class PDFreactor {
             }
         }
         $headerStr .= "Content-Type: application/json\r\n";
-        $headerStr .= "User-Agent: PDFreactor PHP API v7\r\n";
-        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v7\r\n";
+        $headerStr .= "User-Agent: PDFreactor PHP API v8\r\n";
+        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v8\r\n";
         if (!empty($connectionSettings) || !empty($cookieStr)) {
             $headerStr .= "Cookie: " . substr($cookieStr, 0, -2);
         }
@@ -164,30 +178,42 @@ class PDFreactor {
         $rh = fopen($url, false, false, $context);
         if (!isset($http_response_header)) {
             $lastError = error_get_last();
-            throw new \Exception('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
+            throw new UnreachableServiceException('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
         }
         $status = intval(substr($http_response_header[0], 9, 3));
         if ($status >= 200 && $status <= 204) {
             $errorMode = false;
         }
-        if ($errorMode || $wh == null || !$useStream) {
+        if (!$errorMode && ($wh == null || !$useStream)) {
             $result = stream_get_contents($rh);
             fclose($rh);
         }
+        $errorId = null;
+        if ($errorMode) {
+            foreach ($http_response_header as $header) {
+                $t = explode(':', $header, 2);
+                if (isset($t[1])) {
+                    $headerName = trim($t[0]);
+                    if ($headerName == "X-RO-Error-ID") {
+                        $errorId = trim($t[1]);
+                    }
+                }
+            }
+        }
         if ($status == 422) {
-            throw new \Exception($result);
+            throw $this->_createServerException($errorId, $result);
         } else if ($status == 400) {
-            throw new \Exception('Invalid client data. '.$result);
+            throw $this->_createServerException($errorId, 'Invalid client data. '.$result);
         } else if ($status == 401) {
-            throw new \Exception('Unauthorized. '.$result);
+            throw $this->_createServerException($errorId, 'Unauthorized. '.$result);
         } else if ($status == 413) {
-            throw new \Exception('The configuration is too large to process.');
+            throw $this->_createServerException($errorId, 'The configuration is too large to process.');
         } else if ($status == 500) {
-            throw new \Exception($result);
+            throw $this->_createServerException($errorId, $result);
         } else if ($status == 503) {
-            throw new \Exception('PDFreactor Web Service is unavailable.');
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service is unavailable.');
         } else if ($status > 400) {
-            throw new \Exception('PDFreactor Web Service error (status: ' . $status . ').');
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service error (status: ' . $status . ').');
         }
         if (!$errorMode && $wh != null && $useStream) {
             while (!feof($rh)) {
@@ -226,8 +252,8 @@ class PDFreactor {
             }
         }
         $headerStr .= "Content-Type: application/json\r\n";
-        $headerStr .= "User-Agent: PDFreactor PHP API v7\r\n";
-        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v7\r\n";
+        $headerStr .= "User-Agent: PDFreactor PHP API v8\r\n";
+        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v8\r\n";
         if (!empty($connectionSettings) || !empty($cookieStr)) {
             $headerStr .= "Cookie: " . substr($cookieStr, 0, -2);
         }
@@ -247,28 +273,42 @@ class PDFreactor {
         $rh = fopen($url, false, false, $context);
         if (!isset($http_response_header)) {
             $lastError = error_get_last();
-            throw new \Exception('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
+            throw new UnreachableServiceException('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
         }
         $status = intval(substr($http_response_header[0], 9, 3));
         if ($status >= 200 && $status <= 204) {
             $errorMode = false;
         }
-        $result = stream_get_contents($rh);
+        if (!$errorMode) {
+            $result = json_decode(stream_get_contents($rh));
+        }
         fclose($rh);
+        $errorId = null;
+        if ($errorMode) {
+            foreach ($http_response_header as $header) {
+                $t = explode(':', $header, 2);
+                if (isset($t[1])) {
+                    $headerName = trim($t[0]);
+                    if ($headerName == "X-RO-Error-ID") {
+                        $errorId = trim($t[1]);
+                    }
+                }
+            }
+        }
         if ($status == 422) {
-            throw new \Exception(json_decode($result)->error);
+            throw $this->_createServerException($errorId, $result->error, $result);
         } else if ($status == 400) {
-            throw new \Exception('Invalid client data. '.json_decode($result)->error);
+            throw $this->_createServerException($errorId, 'Invalid client data. '.$result->error, $result);
         } else if ($status == 401) {
-            throw new \Exception('Unauthorized. '.json_decode($result)->error);
+            throw $this->_createServerException($errorId, 'Unauthorized. '.$result->error, $result);
         } else if ($status == 413) {
-            throw new \Exception('The configuration is too large to process.');
+            throw $this->_createServerException($errorId, 'The configuration is too large to process.', $result);
         } else if ($status == 500) {
-            throw new \Exception(json_decode($result)->error);
+            throw $this->_createServerException($errorId, $result->error, $result);
         } else if ($status == 503) {
-            throw new \Exception('Asynchronous conversions are unavailable.');
+            throw $this->_createServerException($errorId, 'Asynchronous conversions are unavailable.', $result);
         } else if ($status > 400) {
-            throw new \Exception('PDFreactor Web Service error (status: ' . $status . ').');
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service error (status: ' . $status . ').', $result);
         }
         foreach ($http_response_header as $header) {
             $t = explode(':', $header, 2);
@@ -298,7 +338,7 @@ class PDFreactor {
     }
     function getProgress($documentId, & $connectionSettings = null) {
         if (is_null($documentId)) {
-            throw new \Exception("No conversion was triggered.");
+            throw new ClientException("No conversion was triggered.");
         }
         $url = $this->url ."/progress/" . $documentId . ".json";
         if (!is_null($this->apiKey)) {
@@ -320,8 +360,8 @@ class PDFreactor {
             }
         }
         $headerStr .= "Content-Type: application/json\r\n";
-        $headerStr .= "User-Agent: PDFreactor PHP API v7\r\n";
-        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v7\r\n";
+        $headerStr .= "User-Agent: PDFreactor PHP API v8\r\n";
+        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v8\r\n";
         if (!empty($connectionSettings) || !empty($cookieStr)) {
             $headerStr .= "Cookie: " . substr($cookieStr, 0, -2);
         }
@@ -340,28 +380,44 @@ class PDFreactor {
         $rh = fopen($url, false, false, $context);
         if (!isset($http_response_header)) {
             $lastError = error_get_last();
-            throw new \Exception('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
+            throw new UnreachableServiceException('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
         }
         $status = intval(substr($http_response_header[0], 9, 3));
         if ($status >= 200 && $status <= 204) {
             $errorMode = false;
         }
-        $result = stream_get_contents($rh);
-        fclose($rh);
-        if ($status == 404) {
-            throw new \Exception('Document with the given ID was not found. '.json_decode($result)->error);
-        } else if ($status == 401) {
-            throw new \Exception('Unauthorized. '.json_decode($result)->error);
-        } else if ($status == 503) {
-            throw new \Exception('PDFreactor Web Service is unavailable.');
-        } else if ($status > 400) {
-            throw new \Exception('PDFreactor Web Service error (status: ' . $status . ').');
+        if (!$errorMode) {
+            $result = json_decode(stream_get_contents($rh));
         }
-        return json_decode($result);
+        fclose($rh);
+        $errorId = null;
+        if ($errorMode) {
+            foreach ($http_response_header as $header) {
+                $t = explode(':', $header, 2);
+                if (isset($t[1])) {
+                    $headerName = trim($t[0]);
+                    if ($headerName == "X-RO-Error-ID") {
+                        $errorId = trim($t[1]);
+                    }
+                }
+            }
+        }
+        if ($status == 422) {
+            throw $this->_createServerException($errorId, $result->error, $result);
+        } else if ($status == 404) {
+            throw $this->_createServerException($errorId, 'Document with the given ID was not found. '.$result->error, $result);
+        } else if ($status == 401) {
+            throw $this->_createServerException($errorId, 'Unauthorized. '.$result->error, $result);
+        } else if ($status == 503) {
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service is unavailable.', $result);
+        } else if ($status > 400) {
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service error (status: ' . $status . ').', $result);
+        }
+        return $result;
     }
     function getDocument($documentId, & $connectionSettings = null) {
         if (is_null($documentId)) {
-            throw new \Exception("No conversion was triggered.");
+            throw new ClientException("No conversion was triggered.");
         }
         $url = $this->url ."/document/" . $documentId . ".json";
         if (!is_null($this->apiKey)) {
@@ -383,8 +439,8 @@ class PDFreactor {
             }
         }
         $headerStr .= "Content-Type: application/json\r\n";
-        $headerStr .= "User-Agent: PDFreactor PHP API v7\r\n";
-        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v7\r\n";
+        $headerStr .= "User-Agent: PDFreactor PHP API v8\r\n";
+        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v8\r\n";
         if (!empty($connectionSettings) || !empty($cookieStr)) {
             $headerStr .= "Cookie: " . substr($cookieStr, 0, -2);
         }
@@ -403,28 +459,44 @@ class PDFreactor {
         $rh = fopen($url, false, false, $context);
         if (!isset($http_response_header)) {
             $lastError = error_get_last();
-            throw new \Exception('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
+            throw new UnreachableServiceException('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
         }
         $status = intval(substr($http_response_header[0], 9, 3));
         if ($status >= 200 && $status <= 204) {
             $errorMode = false;
         }
-        $result = stream_get_contents($rh);
-        fclose($rh);
-        if ($status == 404) {
-            throw new \Exception('Document with the given ID was not found. '.json_decode($result)->error);
-        } else if ($status == 401) {
-            throw new \Exception('Unauthorized. '.json_decode($result)->error);
-        } else if ($status == 503) {
-            throw new \Exception('PDFreactor Web Service is unavailable.');
-        } else if ($status > 400) {
-            throw new \Exception('PDFreactor Web Service error (status: ' . $status . ').');
+        if (!$errorMode) {
+            $result = json_decode(stream_get_contents($rh));
         }
-        return json_decode($result);
+        fclose($rh);
+        $errorId = null;
+        if ($errorMode) {
+            foreach ($http_response_header as $header) {
+                $t = explode(':', $header, 2);
+                if (isset($t[1])) {
+                    $headerName = trim($t[0]);
+                    if ($headerName == "X-RO-Error-ID") {
+                        $errorId = trim($t[1]);
+                    }
+                }
+            }
+        }
+        if ($status == 422) {
+            throw $this->_createServerException($errorId, $result->error, $result);
+        } else if ($status == 404) {
+            throw $this->_createServerException($errorId, 'Document with the given ID was not found. '.$result->error, $result);
+        } else if ($status == 401) {
+            throw $this->_createServerException($errorId, 'Unauthorized. '.$result->error, $result);
+        } else if ($status == 503) {
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service is unavailable.', $result);
+        } else if ($status > 400) {
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service error (status: ' . $status . ').', $result);
+        }
+        return $result;
     }
     function getDocumentAsBinary($documentId, & $wh = null, & $connectionSettings = null) {
         if (is_null($documentId)) {
-            throw new \Exception("No conversion was triggered.");
+            throw new ClientException("No conversion was triggered.");
         }
         $url = $this->url ."/document/" . $documentId . ".bin";
         if (!is_null($this->apiKey)) {
@@ -451,8 +523,8 @@ class PDFreactor {
             }
         }
         $headerStr .= "Content-Type: application/json\r\n";
-        $headerStr .= "User-Agent: PDFreactor PHP API v7\r\n";
-        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v7\r\n";
+        $headerStr .= "User-Agent: PDFreactor PHP API v8\r\n";
+        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v8\r\n";
         if (!empty($connectionSettings) || !empty($cookieStr)) {
             $headerStr .= "Cookie: " . substr($cookieStr, 0, -2);
         }
@@ -471,24 +543,38 @@ class PDFreactor {
         $rh = fopen($url, false, false, $context);
         if (!isset($http_response_header)) {
             $lastError = error_get_last();
-            throw new \Exception('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
+            throw new UnreachableServiceException('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
         }
         $status = intval(substr($http_response_header[0], 9, 3));
         if ($status >= 200 && $status <= 204) {
             $errorMode = false;
         }
-        if ($errorMode || $wh == null || !$useStream) {
+        if (!$errorMode && ($wh == null || !$useStream)) {
             $result = stream_get_contents($rh);
             fclose($rh);
         }
-        if ($status == 404) {
-            throw new \Exception('Document with the given ID was not found. '.$result);
+        $errorId = null;
+        if ($errorMode) {
+            foreach ($http_response_header as $header) {
+                $t = explode(':', $header, 2);
+                if (isset($t[1])) {
+                    $headerName = trim($t[0]);
+                    if ($headerName == "X-RO-Error-ID") {
+                        $errorId = trim($t[1]);
+                    }
+                }
+            }
+        }
+        if ($status == 422) {
+            throw $this->_createServerException($errorId, $result);
+        } else if ($status == 404) {
+            throw $this->_createServerException($errorId, 'Document with the given ID was not found. '.$result);
         } else if ($status == 401) {
-            throw new \Exception('Unauthorized. '.$result);
+            throw $this->_createServerException($errorId, 'Unauthorized. '.$result);
         } else if ($status == 503) {
-            throw new \Exception('PDFreactor Web Service is unavailable.');
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service is unavailable.');
         } else if ($status > 400) {
-            throw new \Exception('PDFreactor Web Service error (status: ' . $status . ').');
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service error (status: ' . $status . ').');
         }
         if (!$errorMode && $wh != null && $useStream) {
             while (!feof($rh)) {
@@ -503,7 +589,7 @@ class PDFreactor {
     }
     function getDocumentMetadata($documentId, & $connectionSettings = null) {
         if (is_null($documentId)) {
-            throw new \Exception("No conversion was triggered.");
+            throw new ClientException("No conversion was triggered.");
         }
         $url = $this->url ."/document/metadata/" . $documentId . ".json";
         if (!is_null($this->apiKey)) {
@@ -525,8 +611,8 @@ class PDFreactor {
             }
         }
         $headerStr .= "Content-Type: application/json\r\n";
-        $headerStr .= "User-Agent: PDFreactor PHP API v7\r\n";
-        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v7\r\n";
+        $headerStr .= "User-Agent: PDFreactor PHP API v8\r\n";
+        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v8\r\n";
         if (!empty($connectionSettings) || !empty($cookieStr)) {
             $headerStr .= "Cookie: " . substr($cookieStr, 0, -2);
         }
@@ -545,28 +631,44 @@ class PDFreactor {
         $rh = fopen($url, false, false, $context);
         if (!isset($http_response_header)) {
             $lastError = error_get_last();
-            throw new \Exception('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
+            throw new UnreachableServiceException('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
         }
         $status = intval(substr($http_response_header[0], 9, 3));
         if ($status >= 200 && $status <= 204) {
             $errorMode = false;
         }
-        $result = stream_get_contents($rh);
-        fclose($rh);
-        if ($status == 404) {
-            throw new \Exception('Document with the given ID was not found. '.json_decode($result)->error);
-        } else if ($status == 401) {
-            throw new \Exception('Unauthorized. '.json_decode($result)->error);
-        } else if ($status == 503) {
-            throw new \Exception('PDFreactor Web Service is unavailable.');
-        } else if ($status > 400) {
-            throw new \Exception('PDFreactor Web Service error (status: ' . $status . ').');
+        if (!$errorMode) {
+            $result = json_decode(stream_get_contents($rh));
         }
-        return json_decode($result);
+        fclose($rh);
+        $errorId = null;
+        if ($errorMode) {
+            foreach ($http_response_header as $header) {
+                $t = explode(':', $header, 2);
+                if (isset($t[1])) {
+                    $headerName = trim($t[0]);
+                    if ($headerName == "X-RO-Error-ID") {
+                        $errorId = trim($t[1]);
+                    }
+                }
+            }
+        }
+        if ($status == 422) {
+            throw $this->_createServerException($errorId, $result->error, $result);
+        } else if ($status == 404) {
+            throw $this->_createServerException($errorId, 'Document with the given ID was not found. '.$result->error, $result);
+        } else if ($status == 401) {
+            throw $this->_createServerException($errorId, 'Unauthorized. '.$result->error, $result);
+        } else if ($status == 503) {
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service is unavailable.', $result);
+        } else if ($status > 400) {
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service error (status: ' . $status . ').', $result);
+        }
+        return $result;
     }
     function deleteDocument($documentId, & $connectionSettings = null) {
         if (is_null($documentId)) {
-            throw new \Exception("No conversion was triggered.");
+            throw new ClientException("No conversion was triggered.");
         }
         $url = $this->url ."/document/" . $documentId . ".json";
         if (!is_null($this->apiKey)) {
@@ -588,8 +690,8 @@ class PDFreactor {
             }
         }
         $headerStr .= "Content-Type: application/json\r\n";
-        $headerStr .= "User-Agent: PDFreactor PHP API v7\r\n";
-        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v7\r\n";
+        $headerStr .= "User-Agent: PDFreactor PHP API v8\r\n";
+        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v8\r\n";
         if (!empty($connectionSettings) || !empty($cookieStr)) {
             $headerStr .= "Cookie: " . substr($cookieStr, 0, -2);
         }
@@ -608,22 +710,36 @@ class PDFreactor {
         $rh = fopen($url, false, false, $context);
         if (!isset($http_response_header)) {
             $lastError = error_get_last();
-            throw new \Exception('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
+            throw new UnreachableServiceException('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
         }
         $status = intval(substr($http_response_header[0], 9, 3));
         if ($status >= 200 && $status <= 204) {
             $errorMode = false;
         }
-        $result = stream_get_contents($rh);
+        if (!$errorMode) {
+            $result = json_decode(stream_get_contents($rh));
+        }
         fclose($rh);
+        $errorId = null;
+        if ($errorMode) {
+            foreach ($http_response_header as $header) {
+                $t = explode(':', $header, 2);
+                if (isset($t[1])) {
+                    $headerName = trim($t[0]);
+                    if ($headerName == "X-RO-Error-ID") {
+                        $errorId = trim($t[1]);
+                    }
+                }
+            }
+        }
         if ($status == 404) {
-            throw new \Exception('Document with the given ID was not found. '.json_decode($result)->error);
+            throw $this->_createServerException($errorId, 'Document with the given ID was not found. '.$result->error, $result);
         } else if ($status == 401) {
-            throw new \Exception('Unauthorized. '.json_decode($result)->error);
+            throw $this->_createServerException($errorId, 'Unauthorized. '.$result->error, $result);
         } else if ($status == 503) {
-            throw new \Exception('PDFreactor Web Service is unavailable.');
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service is unavailable.', $result);
         } else if ($status > 400) {
-            throw new \Exception('PDFreactor Web Service error (status: ' . $status . ').');
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service error (status: ' . $status . ').', $result);
         }
     }
     function getVersion(& $connectionSettings = null) {
@@ -647,8 +763,8 @@ class PDFreactor {
             }
         }
         $headerStr .= "Content-Type: application/json\r\n";
-        $headerStr .= "User-Agent: PDFreactor PHP API v7\r\n";
-        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v7\r\n";
+        $headerStr .= "User-Agent: PDFreactor PHP API v8\r\n";
+        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v8\r\n";
         if (!empty($connectionSettings) || !empty($cookieStr)) {
             $headerStr .= "Cookie: " . substr($cookieStr, 0, -2);
         }
@@ -667,22 +783,36 @@ class PDFreactor {
         $rh = fopen($url, false, false, $context);
         if (!isset($http_response_header)) {
             $lastError = error_get_last();
-            throw new \Exception('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
+            throw new UnreachableServiceException('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
         }
         $status = intval(substr($http_response_header[0], 9, 3));
         if ($status >= 200 && $status <= 204) {
             $errorMode = false;
         }
-        $result = stream_get_contents($rh);
-        fclose($rh);
-        if ($status == 401) {
-            throw new \Exception('Unauthorized. '.json_decode($result)->error);
-        } else if ($status == 503) {
-            throw new \Exception('PDFreactor Web Service is unavailable.');
-        } else if ($status > 400) {
-            throw new \Exception('PDFreactor Web Service error (status: ' . $status . ').');
+        if (!$errorMode) {
+            $result = json_decode(stream_get_contents($rh));
         }
-        return json_decode($result);
+        fclose($rh);
+        $errorId = null;
+        if ($errorMode) {
+            foreach ($http_response_header as $header) {
+                $t = explode(':', $header, 2);
+                if (isset($t[1])) {
+                    $headerName = trim($t[0]);
+                    if ($headerName == "X-RO-Error-ID") {
+                        $errorId = trim($t[1]);
+                    }
+                }
+            }
+        }
+        if ($status == 401) {
+            throw $this->_createServerException($errorId, 'Unauthorized. '.$result->error, $result);
+        } else if ($status == 503) {
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service is unavailable.', $result);
+        } else if ($status > 400) {
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service error (status: ' . $status . ').', $result);
+        }
+        return $result;
     }
     function getStatus(& $connectionSettings = null) {
         $url = $this->url ."/status.json";
@@ -705,8 +835,8 @@ class PDFreactor {
             }
         }
         $headerStr .= "Content-Type: application/json\r\n";
-        $headerStr .= "User-Agent: PDFreactor PHP API v7\r\n";
-        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v7\r\n";
+        $headerStr .= "User-Agent: PDFreactor PHP API v8\r\n";
+        $headerStr .= "X-RO-User-Agent: PDFreactor PHP API v8\r\n";
         if (!empty($connectionSettings) || !empty($cookieStr)) {
             $headerStr .= "Cookie: " . substr($cookieStr, 0, -2);
         }
@@ -725,20 +855,34 @@ class PDFreactor {
         $rh = fopen($url, false, false, $context);
         if (!isset($http_response_header)) {
             $lastError = error_get_last();
-            throw new \Exception('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
+            throw new UnreachableServiceException('Error connecting to PDFreactor Web Service at ' . $this->url . '. Please make sure the PDFreactor Web Service is installed and running (Error: ' . $lastError['message'] . ')');
         }
         $status = intval(substr($http_response_header[0], 9, 3));
         if ($status >= 200 && $status <= 204) {
             $errorMode = false;
         }
-        $result = stream_get_contents($rh);
+        if (!$errorMode) {
+            $result = json_decode(stream_get_contents($rh));
+        }
         fclose($rh);
+        $errorId = null;
+        if ($errorMode) {
+            foreach ($http_response_header as $header) {
+                $t = explode(':', $header, 2);
+                if (isset($t[1])) {
+                    $headerName = trim($t[0]);
+                    if ($headerName == "X-RO-Error-ID") {
+                        $errorId = trim($t[1]);
+                    }
+                }
+            }
+        }
         if ($status == 401) {
-            throw new \Exception('Unauthorized. '.json_decode($result)->error);
+            throw $this->_createServerException($errorId, 'Unauthorized. '.$result->error, $result);
         } else if ($status == 503) {
-            throw new \Exception('PDFreactor Web Service is unavailable.');
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service is unavailable.', $result);
         } else if ($status > 400) {
-            throw new \Exception('PDFreactor Web Service error (status: ' . $status . ').');
+            throw $this->_createServerException($errorId, 'PDFreactor Web Service error (status: ' . $status . ').', $result);
         }
     }
     function getDocumentUrl($documentId) {
@@ -753,11 +897,174 @@ class PDFreactor {
         }
         return null;
     }
-    const VERSION = 7;
+    const VERSION = 8;
     public function __get($name) {
         if ($name == "apiKey") {
             return isset($this->$name) ? $this->$name : null;
         }
+    }
+function _createServerException($errorId = null, $message = null, $result = null) {
+    switch ($errorId) {
+        case "asyncUnavailable":
+            return new AsyncUnavailableException($errorId, $message, $result);
+        case "badRequest":
+            return new BadRequestException($errorId, $message, $result);
+        case "commandRejected":
+            return new CommandRejectedException($errorId, $message, $result);
+        case "conversionAborted":
+            return new ConversionAbortedException($errorId, $message, $result);
+        case "conversionFailure":
+            return new ConversionFailureException($errorId, $message, $result);
+        case "documentNotFound":
+            return new DocumentNotFoundException($errorId, $message, $result);
+        case "resourceNotFound":
+            return new ResourceNotFoundException($errorId, $message, $result);
+        case "invalidClient":
+            return new InvalidClientException($errorId, $message, $result);
+        case "invalidConfiguration":
+            return new InvalidConfigurationException($errorId, $message, $result);
+        case "noConfiguration":
+            return new NoConfigurationException($errorId, $message, $result);
+        case "noInputDocument":
+            return new NoInputDocumentException($errorId, $message, $result);
+        case "requestRejected":
+            return new RequestRejectedException($errorId, $message, $result);
+        case "serviceUnavailable":
+            return new ServiceUnavailableException($errorId, $message, $result);
+        case "unauthorized":
+            return new UnauthorizedException($errorId, $message, $result);
+        case "unprocessableConfiguration":
+            return new UnprocessableConfigurationException($errorId, $message, $result);
+        case "unprocessableInput":
+            return new UnprocessableInputException($errorId, $message, $result);
+        case "notAcceptable":
+            return new NotAcceptableException($errorId, $message, $result);
+        default:
+            return new ServerException($errorId, $message, $result);
+    }
+}
+}
+class PDFreactorWebserviceException extends \Exception {
+    var $result;
+    function __construct($message) {
+        parent::__construct($message == null ? "Unknown PDFreactor Web Service error" : $message);
+    }
+    public function __get($property) {
+        if (property_exists($this, $property)) {
+            return $this->$property;
+        }
+    }
+}
+class ServerException extends PDFreactorWebserviceException {
+    var $result;
+    function __construct($errorId = null, $message = null, $result = null) {
+        $this->result = $result;
+        $this->errorId = $errorId;
+        parent::__construct($message == null ? "Unknown PDFreactor Web Service error" : $message);
+    }
+    public function getResult() {
+        return $this->result;
+    }
+}
+class ClientException extends PDFreactorWebserviceException {
+    var $result;
+    function __construct($message) {
+        parent::__construct($message);
+    }
+}
+class AsyncUnavailableException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class BadRequestException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class CommandRejectedException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class ConversionAbortedException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class ConversionFailureException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class DocumentNotFoundException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class ResourceNotFoundException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class InvalidClientException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class InvalidConfigurationException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class NoConfigurationException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class NoInputDocumentException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class RequestRejectedException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class ServiceUnavailableException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class UnauthorizedException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class UnprocessableConfigurationException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class UnprocessableInputException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class NotAcceptableException extends ServerException {
+    function __construct($errorId, $message, $result) {
+        parent::__construct($errorId, $message, $result);
+    }
+}
+class UnreachableServiceException extends ClientException {
+    function __construct($message) {
+        parent::__construct($message);
+    }
+}
+class InvalidServiceException extends ClientException {
+    function __construct($message) {
+        parent::__construct($message);
     }
 }
 abstract class CallbackType {
@@ -828,8 +1135,10 @@ abstract class Encryption {
     const TYPE_40 = "TYPE_40";
 }
 abstract class ErrorPolicy {
+    const CONFORMANCE_VALIDATION_UNAVAILABLE = "CONFORMANCE_VALIDATION_UNAVAILABLE";
     const LICENSE = "LICENSE";
     const MISSING_RESOURCE = "MISSING_RESOURCE";
+    const UNCAUGHT_JAVASCRIPT_EXCEPTION = "UNCAUGHT_JAVASCRIPT_EXCEPTION";
 }
 abstract class ExceedingContentAgainst {
     const NONE = "NONE";
@@ -908,6 +1217,7 @@ abstract class OutputIntentDefaultProfile {
 abstract class OutputType {
     const BMP = "BMP";
     const GIF = "GIF";
+    const GIF_DITHERED = "GIF_DITHERED";
     const JPEG = "JPEG";
     const PDF = "PDF";
     const PNG = "PNG";
@@ -915,8 +1225,11 @@ abstract class OutputType {
     const PNG_TRANSPARENT = "PNG_TRANSPARENT";
     const PNG_TRANSPARENT_AI = "PNG_TRANSPARENT_AI";
     const TIFF_CCITT_1D = "TIFF_CCITT_1D";
+    const TIFF_CCITT_1D_DITHERED = "TIFF_CCITT_1D_DITHERED";
     const TIFF_CCITT_GROUP_3 = "TIFF_CCITT_GROUP_3";
+    const TIFF_CCITT_GROUP_3_DITHERED = "TIFF_CCITT_GROUP_3_DITHERED";
     const TIFF_CCITT_GROUP_4 = "TIFF_CCITT_GROUP_4";
+    const TIFF_CCITT_GROUP_4_DITHERED = "TIFF_CCITT_GROUP_4_DITHERED";
     const TIFF_LZW = "TIFF_LZW";
     const TIFF_PACKBITS = "TIFF_PACKBITS";
     const TIFF_UNCOMPRESSED = "TIFF_UNCOMPRESSED";
@@ -960,18 +1273,29 @@ abstract class QuirksMode {
     const QUIRKS = "QUIRKS";
     const STANDARDS = "STANDARDS";
 }
+abstract class ResolutionUnit {
+    const DPCM = "DPCM";
+    const DPI = "DPI";
+    const DPPX = "DPPX";
+    const TDPCM = "TDPCM";
+    const TDPI = "TDPI";
+    const TDPPX = "TDPPX";
+}
 abstract class ResourceType {
     const ATTACHMENT = "ATTACHMENT";
+    const DOCUMENT = "DOCUMENT";
     const FONT = "FONT";
     const ICC_PROFILE = "ICC_PROFILE";
     const IFRAME = "IFRAME";
     const IMAGE = "IMAGE";
+    const LICENSEKEY = "LICENSEKEY";
     const MERGE_DOCUMENT = "MERGE_DOCUMENT";
     const OBJECT = "OBJECT";
     const RUNNING_DOCUMENT = "RUNNING_DOCUMENT";
     const SCRIPT = "SCRIPT";
     const STYLESHEET = "STYLESHEET";
     const UNKNOWN = "UNKNOWN";
+    const XHR = "XHR";
 }
 abstract class SigningMode {
     const SELF_SIGNED = "SELF_SIGNED";
@@ -1016,3 +1340,4 @@ abstract class XmpPriority {
     const LOW = "LOW";
     const NONE = "NONE";
 }
+?>
