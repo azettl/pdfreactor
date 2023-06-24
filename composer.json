@@ -8,7 +8,7 @@
   "authors": [
   ],
   "require": {
-    "php": "^7.3"
+    "PHP": ">=7.3"
   },
   "autoload": {
     "classmap": ["PDFreactor.class.php"]
